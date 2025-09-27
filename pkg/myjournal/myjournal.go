@@ -3,6 +3,9 @@ package myjournal
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/dkrotx/cassandra-learning/pkg/entities"
 	"github.com/gocql/gocql"
@@ -26,6 +29,31 @@ type JournalDB struct {
 // Module is the fx-module for the journal database.
 var Module = fx.Provide(NewDB)
 
+type verboseQueryObserver struct {
+	logger *zap.Logger
+}
+
+func (v *verboseQueryObserver) ObserveQuery(ctx context.Context, q gocql.ObservedQuery) {
+	vals := make([]string, len(q.Values))
+	for i, v := range q.Values {
+		switch b := v.(type) {
+		case []byte:
+			// avoid dumping huge binary; print length
+			vals[i] = "<bytes:" + strconv.Itoa(len(b)) + "B>"
+		case time.Time:
+			vals[i] = b.UTC().Format(time.RFC3339Nano)
+		default:
+			vals[i] = fmt.Sprintf("%v", v)
+		}
+	}
+
+	v.logger.Info(
+		"[CQL] stmt=%s values=[%s]\n",
+		zap.String("statement", q.Statement),
+		zap.String("values", strings.Join(vals, ", ")),
+	)
+}
+
 func NewDB(cfgProvider config.Provider, logger *zap.Logger) (*JournalDB, error) {
 	var cfg Config
 	if err := cfgProvider.Get("cassandra").Populate(&cfg); err != nil {
@@ -34,6 +62,7 @@ func NewDB(cfgProvider config.Provider, logger *zap.Logger) (*JournalDB, error) 
 
 	cluster := gocql.NewCluster(cfg.Hosts...)
 	cluster.Keyspace = cfg.Keyspace
+	cluster.QueryObserver = &verboseQueryObserver{logger: logger}
 
 	session, err := cluster.CreateSession()
 	if err != nil {

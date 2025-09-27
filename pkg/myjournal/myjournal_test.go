@@ -23,7 +23,10 @@ func newTestDB(t *testing.T) *JournalDB {
 	configProvider, err := config.NewYAML(config.Source(strings.NewReader(testConfig)))
 	require.NoError(t, err)
 
-	db, err := NewDB(configProvider, zap.NewNop())
+	logger, err := zap.NewDevelopment()
+	require.NoError(t, err)
+
+	db, err := NewDB(configProvider, logger)
 	require.NoError(t, err)
 	return db
 }
