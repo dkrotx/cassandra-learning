@@ -2,9 +2,9 @@ package myjournal
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/dkrotx/cassandra-learning/pkg/entities"
 	"github.com/google/uuid"
@@ -17,6 +17,8 @@ const testConfig = `cassandra:
   hosts: ["localhost:9042"]
   keyspace: "myjournal"`
 
+var testUserUUID = entities.UserID(uuid.MustParse("10000000-1000-f000-f000-000000000000"))
+
 func newTestDB(t *testing.T) *JournalDB {
 	configProvider, err := config.NewYAML(config.Source(strings.NewReader(testConfig)))
 	require.NoError(t, err)
@@ -28,14 +30,21 @@ func newTestDB(t *testing.T) *JournalDB {
 
 func TestCreatePost(t *testing.T) {
 	db := newTestDB(t)
-	err := db.CreatePost(context.Background(), &entities.Post{
-		Title:     "test title",
-		PostID:    uuid.New(),
-		User:      "dkrot",
-		Body:      "test body",
-		Private:   false,
-		CreatedAt: time.Now(),
-	})
+	err := db.CreatePost(context.Background(),
+		testUserUUID,
+		&entities.PostData{
+			Title: "test title",
+			Body:  "test body",
+			Tags:  []string{"Skanderborg", "school"},
+		},
+	)
 
 	require.NoError(t, err)
+}
+
+func TestReadPostsByUser(t *testing.T) {
+	db := newTestDB(t)
+	posts, err := db.ReadPostsByUser(context.Background(), testUserUUID)
+	require.NoError(t, err)
+	fmt.Printf("%v", posts)
 }

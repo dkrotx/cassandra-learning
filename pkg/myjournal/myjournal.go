@@ -6,6 +6,7 @@ import (
 
 	"github.com/dkrotx/cassandra-learning/pkg/entities"
 	"github.com/gocql/gocql"
+	"github.com/google/uuid"
 	"go.uber.org/config"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -45,17 +46,49 @@ func NewDB(cfgProvider config.Provider, logger *zap.Logger) (*JournalDB, error) 
 	}, nil
 }
 
-func (db *JournalDB) CreatePost(ctx context.Context, post *entities.Post) error {
-	query := `INSERT INTO posts (user, post_id, title, body, created_at, private) VALUES (?, ?, ?, ?, ?, ?)`
+func (db *JournalDB) CreatePost(ctx context.Context, userID entities.UserID, post *entities.PostData) error {
+	query := `INSERT INTO posts_by_user (user_id, post_id, title, body, tags) VALUES (?, ?, ?, ?, ?)`
 	if err := db.session.Query(query,
-		post.User,
-		post.PostID.String(),
+		userID.String(),
+		gocql.TimeUUID(),
 		post.Title,
 		post.Body,
-		post.CreatedAt,
-		post.Private,
+		post.Tags,
 	).WithContext(ctx).Exec(); err != nil {
 		return fmt.Errorf("failed to create post: %v", err)
 	}
 	return nil
+}
+
+func (db *JournalDB) ReadPostsByUser(ctx context.Context, userID entities.UserID) ([]*entities.Post, error) {
+	query := `SELECT post_id, title, body, tags FROM posts_by_user WHERE user_id = ?`
+	var posts []*entities.Post
+
+	iter := db.session.Query(query, userID.String()).WithContext(ctx).Iter()
+
+	var postID gocql.UUID
+	var title string
+	var body string
+	var tags []string
+
+	for iter.Scan(&postID, &title, &body, &tags) {
+		post := &entities.Post{
+			PostID:    uuid.UUID(postID),
+			CreatedAt: postID.Time(),
+			PostData: entities.PostData{
+				Title: title,
+				Body:  body,
+				Tags:  tags,
+			},
+		}
+
+		posts = append(posts, post)
+	}
+
+	// Check for any errors that occurred during iteration
+	if err := iter.Close(); err != nil {
+		return nil, fmt.Errorf("failed to read posts: %v", err)
+	}
+
+	return posts, nil
 }

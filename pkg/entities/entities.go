@@ -6,11 +6,16 @@ import (
 	"github.com/google/uuid"
 )
 
+type UserID = uuid.UUID
+
+type PostData struct {
+	Title string
+	Body  string
+	Tags  []string
+}
+
 type Post struct {
-	Title     string
+	PostData
 	PostID    uuid.UUID
-	User      string
-	Body      string
-	Private   bool
 	CreatedAt time.Time
 }
