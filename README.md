@@ -12,6 +12,22 @@ You can always install schema separately with `make install-schema`
 Experiments could be launched manually with tests:
 explore `pkg/myjournal/myjournal_test.go`
 
+## CLI Application
+
+The project includes a CLI tool for managing journal posts. The CLI provides commands to create and read posts.
+
+### Building the CLI
+
+Use `make bins` to compile the `./myjournal-cli` CLI.
+
+```bash
+# Using make
+./myjournal-cli create --user-id 10000000-1000-f000-f000-000000000000 --title "My Post" --body "Post content" --tags "tag1,tag2"
+./myjournal-cli read --user-id 10000000-1000-f000-f000-000000000000 # show all posts for a user
+```
+
+These commands also log the CQL queries to the console if `cassandra.log_queries` is set to `true` in the config file.
+
 ## Experimenting with cqlsh
 Tons of experiments could be done with cqlsh.  
 Just login to the cassandra container by `docker exec -it cassandra bash`, it has `cqlsh` installed.
@@ -36,8 +52,8 @@ Use this commands to expore SSTables:
 ```bash
 export PATH=$PATH:/opt/cassandra/tools/bin/
 cd /opt/cassandra/data/data/myjournal/posts_by_user-XXX # there should be at least one directory
-/opt/cassandra/tools/bin/sstabledump nb-1-big-Data.db # explore a single sstable
-sstablemetadata nb-1-big-Data.db
+sstabledump nb-1-big-Data.db # explore a single sstable
+sstablemetadata nb-1-big-Data.db # show metadata (incl compressoin, partition size, etc)
 ```
 
 The following commands are interacting with the Cassandra node: 

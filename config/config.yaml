@@ -1,0 +1,4 @@
+cassandra:
+  hosts: ["localhost:9042"]
+  keyspace: "myjournal"
+  log_queries: true
