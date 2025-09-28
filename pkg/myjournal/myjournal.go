@@ -11,7 +11,6 @@ import (
 	"github.com/gocql/gocql"
 	"github.com/google/uuid"
 	"go.uber.org/config"
-	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
 
@@ -26,9 +25,6 @@ type JournalDB struct {
 	session *gocql.Session
 	logger  *zap.Logger
 }
-
-// Module is the fx-module for the journal database.
-var Module = fx.Provide(NewDB)
 
 type verboseQueryObserver struct {
 	logger *zap.Logger
