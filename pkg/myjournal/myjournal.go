@@ -18,6 +18,7 @@ import (
 type Config struct {
 	Hosts       []string `yaml:"hosts"`
 	Keyspace    string   `yaml:"keyspace"`
+	LogQueries  bool     `yaml:"log_queries"`
 	Consistency string   `yaml:"consistency"`
 }
 
@@ -43,14 +44,12 @@ func (v *verboseQueryObserver) ObserveQuery(ctx context.Context, q gocql.Observe
 		case time.Time:
 			vals[i] = b.UTC().Format(time.RFC3339Nano)
 		default:
-			vals[i] = fmt.Sprintf("%v", v)
+			vals[i] = fmt.Sprintf("%+v", v)
 		}
 	}
 
-	v.logger.Info(
-		"[CQL] stmt=%s values=[%s]\n",
-		zap.String("statement", q.Statement),
-		zap.String("values", strings.Join(vals, ", ")),
+	v.logger.Info("Captured cassandra query",
+		zap.String("statement", q.Statement), zap.String("values", strings.Join(vals, ", ")),
 	)
 }
 
@@ -62,7 +61,10 @@ func NewDB(cfgProvider config.Provider, logger *zap.Logger) (*JournalDB, error) 
 
 	cluster := gocql.NewCluster(cfg.Hosts...)
 	cluster.Keyspace = cfg.Keyspace
-	cluster.QueryObserver = &verboseQueryObserver{logger: logger}
+
+	if cfg.LogQueries {
+		cluster.QueryObserver = &verboseQueryObserver{logger: logger}
+	}
 
 	session, err := cluster.CreateSession()
 	if err != nil {
@@ -76,7 +78,7 @@ func NewDB(cfgProvider config.Provider, logger *zap.Logger) (*JournalDB, error) 
 }
 
 func (db *JournalDB) CreatePost(ctx context.Context, userID entities.UserID, post *entities.PostData) error {
-	query := `INSERT INTO posts_by_user (user_id, post_id, title, body, tags) VALUES (?, ?, ?, ?, ?)`
+	query := `INSERT INTO posts_by_user (user_id, post_id, post, tags) VALUES (?, ?, {title: ?, body: ?}, ?)`
 	if err := db.session.Query(query,
 		userID.String(),
 		gocql.TimeUUID(),
@@ -90,15 +92,15 @@ func (db *JournalDB) CreatePost(ctx context.Context, userID entities.UserID, pos
 }
 
 func (db *JournalDB) ReadPostsByUser(ctx context.Context, userID entities.UserID) ([]*entities.Post, error) {
-	query := `SELECT post_id, title, body, tags FROM posts_by_user WHERE user_id = ?`
+	query := `SELECT post_id, post.title, post.body, tags FROM posts_by_user WHERE user_id = ? LIMIT ?`
 	var posts []*entities.Post
 
-	iter := db.session.Query(query, userID.String()).WithContext(ctx).Iter()
+	iter := db.session.Query(query, userID.String(), 3).WithContext(ctx).Iter()
 
 	var postID gocql.UUID
+	var tags []string
 	var title string
 	var body string
-	var tags []string
 
 	for iter.Scan(&postID, &title, &body, &tags) {
 		post := &entities.Post{

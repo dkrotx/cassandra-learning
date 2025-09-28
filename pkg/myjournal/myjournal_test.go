@@ -13,9 +13,12 @@ import (
 	"go.uber.org/zap"
 )
 
-const testConfig = `cassandra:
+const testConfig = `
+cassandra:
   hosts: ["localhost:9042"]
-  keyspace: "myjournal"`
+  keyspace: "myjournal"
+  log_queries: true
+`
 
 var testUserUUID = entities.UserID(uuid.MustParse("10000000-1000-f000-f000-000000000000"))
 
@@ -49,5 +52,7 @@ func TestReadPostsByUser(t *testing.T) {
 	db := newTestDB(t)
 	posts, err := db.ReadPostsByUser(context.Background(), testUserUUID)
 	require.NoError(t, err)
-	fmt.Printf("%v", posts)
+	for _, post := range posts {
+		fmt.Printf("%+v\n", post)
+	}
 }
