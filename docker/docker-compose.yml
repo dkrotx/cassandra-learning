@@ -1,0 +1,28 @@
+services:
+  cassandra:
+    image: cassandra:latest
+    container_name: cassandra
+    ports:
+      - "9042:9042"
+    environment:
+      - CASSANDRA_USER=admin
+      - CASSANDRA_PASSWORD=admin
+    volumes:
+      - cassandra-data:/var/lib/cassandra
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh -e 'describe keyspaces'"]
+      interval: 10s
+      retries: 10
+      start_period: 30s
+  cassandra-schema-init:
+    image: cassandra:latest
+    depends_on:
+      cassandra:
+        condition: service_healthy
+    volumes:
+      - ../schema:/schema
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["cqlsh cassandra -f /schema/myjournal.cql"]
+
+volumes:
+  cassandra-data:
