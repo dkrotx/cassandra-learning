@@ -1,3 +1,4 @@
+[![Go](https://github.com/dkrotx/cassandra-learning/actions/workflows/go.yml/badge.svg)](https://github.com/dkrotx/cassandra-learning/actions/workflows/go.yml) [![golangci-lint](https://github.com/dkrotx/cassandra-learning/actions/workflows/golangci-lint.yml/badge.svg)](https://github.com/dkrotx/cassandra-learning/actions/workflows/golangci-lint.yml)
 # cassandra-learning
 This is a repository for learning Apache Cassandra, and how it interacts with golang/gocql
 
