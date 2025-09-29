@@ -64,5 +64,8 @@ nodetool flush myjournal # flush memtable of myjournal keyspace
 
 # Cassanrda read-path recap
 
-Want to refresh how Cassanrda performs query. Here is a digram:  
+Want to refresh how Cassanrda performs query? Here is a digram:  
 ![Cassandra Read Path](docs/cassandra_read_path.svg)
+
+Here is a diagram from Datastax showing what's in memory.  
+![Read Path And What's in memory](docs/datastax_read_path.png)
