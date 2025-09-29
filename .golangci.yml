@@ -1,0 +1,12 @@
+version: "2"
+linters:
+  default: none
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - proto$
+      - _mock.go$
