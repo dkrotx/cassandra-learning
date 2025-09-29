@@ -61,3 +61,8 @@ The following commands are interacting with the Cassandra node:
 nodetool compact myjournal # call compaction of myjournal keyspace. As the result there will be a single sstable
 nodetool flush myjournal # flush memtable of myjournal keyspace
 ```
+
+# Cassanrda read-path recap
+
+Want to refresh how Cassanrda performs query. Here is a digram:  
+![Cassandra Read Path](docs/cassandra_read_path.svg)
