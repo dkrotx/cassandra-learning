@@ -3,7 +3,15 @@ CREATE KEYSPACE IF NOT EXISTS myjournal
 
 CREATE TYPE IF NOT EXISTS myjournal.post (
     title   text,
-    body    text,
+    body    text
+);
+
+CREATE TABLE IF NOT EXISTS myjournal.users (
+    name text,
+    email text,
+    user_id uuid,
+    data map<text, text>,
+    PRIMARY KEY ((name))
 );
 
 CREATE TABLE IF NOT EXISTS myjournal.posts_by_user (
@@ -13,3 +21,10 @@ CREATE TABLE IF NOT EXISTS myjournal.posts_by_user (
     tags    set<text>,
     PRIMARY KEY ((user_id), post_id)
 ) WITH CLUSTERING ORDER BY (post_id DESC);
+
+-- reverse lookup table to be able to locate user_id by post_id
+CREATE TABLE IF NOT EXISTS myjournal.user_by_postid (
+    post_id    timeuuid,
+    user_id    uuid,
+    PRIMARY KEY ((post_id))
+);

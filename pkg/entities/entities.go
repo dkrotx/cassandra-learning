@@ -7,6 +7,7 @@ import (
 )
 
 type UserID = uuid.UUID
+type PostID = uuid.UUID
 
 type PostData struct {
 	Title string

@@ -3,85 +3,31 @@ package myjournal
 import (
 	"context"
 	"fmt"
-	"strconv"
-	"strings"
-	"time"
 
 	"github.com/dkrotx/cassandra-learning/pkg/entities"
 	"github.com/gocql/gocql"
 	"github.com/google/uuid"
-	"go.uber.org/config"
-	"go.uber.org/zap"
 )
 
-type Config struct {
-	Hosts       []string `yaml:"hosts"`
-	Keyspace    string   `yaml:"keyspace"`
-	LogQueries  bool     `yaml:"log_queries"`
-	Consistency string   `yaml:"consistency"`
-}
-
-type JournalDB struct {
-	session *gocql.Session
-	logger  *zap.Logger
-}
-
-type verboseQueryObserver struct {
-	logger *zap.Logger
-}
-
-func (v *verboseQueryObserver) ObserveQuery(ctx context.Context, q gocql.ObservedQuery) {
-	vals := make([]string, len(q.Values))
-	for i, v := range q.Values {
-		switch b := v.(type) {
-		case []byte:
-			// avoid dumping huge binary; print length
-			vals[i] = "<bytes:" + strconv.Itoa(len(b)) + "B>"
-		case time.Time:
-			vals[i] = b.UTC().Format(time.RFC3339Nano)
-		default:
-			vals[i] = fmt.Sprintf("%+v", v)
-		}
-	}
-
-	v.logger.Info("Captured cassandra query",
-		zap.String("statement", q.Statement), zap.String("values", strings.Join(vals, ", ")),
-	)
-}
-
-func NewDB(cfgProvider config.Provider, logger *zap.Logger) (*JournalDB, error) {
-	var cfg Config
-	if err := cfgProvider.Get("cassandra").Populate(&cfg); err != nil {
-		return nil, fmt.Errorf("failed to populate config: %v", err)
-	}
-
-	cluster := gocql.NewCluster(cfg.Hosts...)
-	cluster.Keyspace = cfg.Keyspace
-
-	if cfg.LogQueries {
-		cluster.QueryObserver = &verboseQueryObserver{logger: logger}
-	}
-
-	session, err := cluster.CreateSession()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create session: %v", err)
-	}
-
-	return &JournalDB{
-		session: session,
-		logger:  logger,
-	}, nil
-}
-
 func (db *JournalDB) CreatePost(ctx context.Context, userID entities.UserID, post *entities.PostData) error {
-	query := `INSERT INTO posts_by_user (user_id, post_id, post, tags) VALUES (?, ?, {title: ?, body: ?}, ?)`
-	if err := db.session.Query(query,
+	batch := db.session.NewBatch(gocql.LoggedBatch)
+
+	postID := gocql.TimeUUID()
+
+	batch.Query(`INSERT INTO posts_by_user (user_id, post_id, post, tags) VALUES (?, ?, {title: ?, body: ?}, ?)`,
 		userID.String(),
-		gocql.TimeUUID(),
+		postID,
 		post.Title,
 		post.Body,
 		post.Tags,
-	).WithContext(ctx).Exec(); err != nil {
+	)
+
+	batch.Query(`INSERT INTO user_by_postid (post_id, user_id) VALUES (?, ?)`,
+		postID,
+		userID.String(),
+	)
+
+	if err := db.session.ExecuteBatch(batch); err != nil {
 		return fmt.Errorf("failed to create post: %v", err)
 	}
 	return nil
@@ -118,4 +64,82 @@ func (db *JournalDB) ReadPostsByUser(ctx context.Context, userID entities.UserID
 	}
 
 	return posts, nil
+}
+
+func (db *JournalDB) DeletePost(ctx context.Context, postID entities.PostID) error {
+	// First, get the user_id for this post
+	var userID string
+	query := `SELECT user_id FROM user_by_postid WHERE post_id = ?`
+	if err := db.session.Query(query, gocql.UUID(postID)).WithContext(ctx).Scan(&userID); err != nil {
+		return fmt.Errorf("failed to find user for post: %v", err)
+	}
+
+	// Delete from both tables
+	batch := db.session.NewBatch(gocql.LoggedBatch)
+
+	batch.Query(`DELETE FROM posts_by_user WHERE user_id = ? AND post_id = ?`,
+		userID,
+		gocql.UUID(postID),
+	)
+
+	batch.Query(`DELETE FROM user_by_postid WHERE post_id = ?`,
+		gocql.UUID(postID),
+	)
+
+	if err := db.session.ExecuteBatch(batch); err != nil {
+		return fmt.Errorf("failed to delete post: %v", err)
+	}
+
+	return nil
+}
+
+func (db *JournalDB) DeletePostByUser(ctx context.Context, postID entities.PostID, userID entities.UserID) error {
+	// Verify the post belongs to the user
+	var foundUserID string
+	query := `SELECT user_id FROM user_by_postid WHERE post_id = ?`
+	if err := db.session.Query(query, gocql.UUID(postID)).WithContext(ctx).Scan(&foundUserID); err != nil {
+		return fmt.Errorf("failed to find post: %v", err)
+	}
+
+	if foundUserID != userID.String() {
+		return fmt.Errorf("post does not belong to the specified user")
+	}
+
+	// Delete from both tables
+	batch := db.session.NewBatch(gocql.LoggedBatch)
+
+	batch.Query(`DELETE FROM posts_by_user WHERE user_id = ? AND post_id = ?`,
+		userID.String(),
+		gocql.UUID(postID),
+	)
+
+	batch.Query(`DELETE FROM user_by_postid WHERE post_id = ?`,
+		gocql.UUID(postID),
+	)
+
+	if err := db.session.ExecuteBatch(batch); err != nil {
+		return fmt.Errorf("failed to delete post: %v", err)
+	}
+
+	return nil
+}
+
+func (db *JournalDB) AddTags(ctx context.Context, postID entities.PostID, userID entities.UserID, tags []string) error {
+	// Add tags to the post
+	query := `UPDATE posts_by_user SET tags = tags + ? WHERE user_id = ? AND post_id = ?`
+	if err := db.session.Query(query, tags, userID.String(), gocql.UUID(postID)).WithContext(ctx).Exec(); err != nil {
+		return fmt.Errorf("failed to add tags: %v", err)
+	}
+
+	return nil
+}
+
+func (db *JournalDB) RemoveTags(ctx context.Context, postID entities.PostID, userID entities.UserID, tags []string) error {
+	// Remove tags from the post
+	query := `UPDATE posts_by_user SET tags = tags - ? WHERE user_id = ? AND post_id = ?`
+	if err := db.session.Query(query, tags, userID.String(), gocql.UUID(postID)).WithContext(ctx).Exec(); err != nil {
+		return fmt.Errorf("failed to remove tags: %v", err)
+	}
+
+	return nil
 }

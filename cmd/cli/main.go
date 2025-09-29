@@ -80,6 +80,114 @@ func runCLI(db *myjournal.JournalDB) {
 					return readPosts(ctx, c, db)
 				},
 			},
+			{
+				Name:    "delete",
+				Aliases: []string{"d"},
+				Usage:   "Delete a post",
+				Commands: []*cli.Command{
+					{
+						Name:    "by-id",
+						Aliases: []string{"id"},
+						Usage:   "Delete post by post ID only",
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:     "post-id",
+								Aliases:  []string{"p"},
+								Usage:    "Post ID (UUID format)",
+								Required: true,
+							},
+						},
+						Action: func(ctx context.Context, c *cli.Command) error {
+							return deletePost(ctx, c, db)
+						},
+					},
+					{
+						Name:    "by-user",
+						Aliases: []string{"user"},
+						Usage:   "Delete post by post ID and user ID",
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:     "post-id",
+								Aliases:  []string{"p"},
+								Usage:    "Post ID (UUID format)",
+								Required: true,
+							},
+							&cli.StringFlag{
+								Name:     "user-id",
+								Aliases:  []string{"u"},
+								Usage:    "User ID (UUID format)",
+								Required: true,
+							},
+						},
+						Action: func(ctx context.Context, c *cli.Command) error {
+							return deletePostByUser(ctx, c, db)
+						},
+					},
+				},
+			},
+			{
+				Name:    "tags",
+				Aliases: []string{"t"},
+				Usage:   "Manage post tags",
+				Commands: []*cli.Command{
+					{
+						Name:    "add",
+						Aliases: []string{"a"},
+						Usage:   "Add tags to a post",
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:     "post-id",
+								Aliases:  []string{"p"},
+								Usage:    "Post ID (UUID format)",
+								Required: true,
+							},
+							&cli.StringFlag{
+								Name:     "user-id",
+								Aliases:  []string{"u"},
+								Usage:    "User ID (UUID format)",
+								Required: true,
+							},
+							&cli.StringSliceFlag{
+								Name:     "tags",
+								Aliases:  []string{"tag"},
+								Usage:    "Tags to add (can be specified multiple times)",
+								Required: true,
+							},
+						},
+						Action: func(ctx context.Context, c *cli.Command) error {
+							return addTags(ctx, c, db)
+						},
+					},
+					{
+						Name:    "remove",
+						Aliases: []string{"r"},
+						Usage:   "Remove tags from a post",
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:     "post-id",
+								Aliases:  []string{"p"},
+								Usage:    "Post ID (UUID format)",
+								Required: true,
+							},
+							&cli.StringFlag{
+								Name:     "user-id",
+								Aliases:  []string{"u"},
+								Usage:    "User ID (UUID format)",
+								Required: true,
+							},
+							&cli.StringSliceFlag{
+								Name:     "tags",
+								Aliases:  []string{"tag"},
+								Usage:    "Tags to remove (can be specified multiple times)",
+								Required: true,
+							},
+						},
+						Action: func(ctx context.Context, c *cli.Command) error {
+							return removeTags(ctx, c, db)
+						},
+					},
+				},
+			},
 		},
 	}
 
@@ -149,6 +257,105 @@ func readPosts(ctx context.Context, c *cli.Command, db *myjournal.JournalDB) err
 		fmt.Println()
 	}
 
+	return nil
+}
+
+func deletePost(ctx context.Context, c *cli.Command, db *myjournal.JournalDB) error {
+	// Parse post ID
+	postIDStr := c.String("post-id")
+	postID, err := uuid.Parse(postIDStr)
+	if err != nil {
+		return fmt.Errorf("invalid post ID: %v", err)
+	}
+
+	// Delete post
+	err = db.DeletePost(ctx, entities.PostID(postID))
+	if err != nil {
+		return fmt.Errorf("failed to delete post: %v", err)
+	}
+
+	fmt.Printf("Successfully deleted post: %s\n", postIDStr)
+	return nil
+}
+
+func deletePostByUser(ctx context.Context, c *cli.Command, db *myjournal.JournalDB) error {
+	// Parse post ID
+	postIDStr := c.String("post-id")
+	postID, err := uuid.Parse(postIDStr)
+	if err != nil {
+		return fmt.Errorf("invalid post ID: %v", err)
+	}
+
+	// Parse user ID
+	userIDStr := c.String("user-id")
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return fmt.Errorf("invalid user ID: %v", err)
+	}
+
+	// Delete post
+	err = db.DeletePostByUser(ctx, entities.PostID(postID), entities.UserID(userID))
+	if err != nil {
+		return fmt.Errorf("failed to delete post: %v", err)
+	}
+
+	fmt.Printf("Successfully deleted post %s for user %s\n", postIDStr, userIDStr)
+	return nil
+}
+
+func addTags(ctx context.Context, c *cli.Command, db *myjournal.JournalDB) error {
+	// Parse post ID
+	postIDStr := c.String("post-id")
+	postID, err := uuid.Parse(postIDStr)
+	if err != nil {
+		return fmt.Errorf("invalid post ID: %v", err)
+	}
+
+	// Parse user ID
+	userIDStr := c.String("user-id")
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return fmt.Errorf("invalid user ID: %v", err)
+	}
+
+	// Get tags
+	tags := c.StringSlice("tags")
+
+	// Add tags
+	err = db.AddTags(ctx, entities.PostID(postID), entities.UserID(userID), tags)
+	if err != nil {
+		return fmt.Errorf("failed to add tags: %v", err)
+	}
+
+	fmt.Printf("Successfully added tags %v to post %s\n", tags, postIDStr)
+	return nil
+}
+
+func removeTags(ctx context.Context, c *cli.Command, db *myjournal.JournalDB) error {
+	// Parse post ID
+	postIDStr := c.String("post-id")
+	postID, err := uuid.Parse(postIDStr)
+	if err != nil {
+		return fmt.Errorf("invalid post ID: %v", err)
+	}
+
+	// Parse user ID
+	userIDStr := c.String("user-id")
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return fmt.Errorf("invalid user ID: %v", err)
+	}
+
+	// Get tags
+	tags := c.StringSlice("tags")
+
+	// Remove tags
+	err = db.RemoveTags(ctx, entities.PostID(postID), entities.UserID(userID), tags)
+	if err != nil {
+		return fmt.Errorf("failed to remove tags: %v", err)
+	}
+
+	fmt.Printf("Successfully removed tags %v from post %s\n", tags, postIDStr)
 	return nil
 }
 
